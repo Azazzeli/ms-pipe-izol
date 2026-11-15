@@ -1,0 +1,6 @@
+LIBRARY HelloNRX
+EXPORTS
+ncrxEntryPoint
+acrxEntryPoint
+ncrxGetApiVersion
+acrxGetApiVersion
