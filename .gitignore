@@ -27,23 +27,6 @@ trash-x64/
 ipch/
 *.vsidx
 
-# Local clutter / old builds
-PIPE_ALIGN_crash.log
-_exports_new.txt
-HelloNRX_fixang.nrx
-HelloNRX_hold.nrx
-HelloNRX_hold2.nrx
-HelloNRX_insul.nrx
-HelloNRX_insul2.nrx
-HelloNRX_izol.nrx
-HelloNRX_izol3.nrx
-HelloNRX_izol4.nrx
-HelloNRX_izol5.nrx
-HelloNRX_izol6.nrx
-HelloNRX_izol7.nrx
-HelloNRX_log.nrx
-HelloNRX_safe.nrx
-
 # Secrets / local env
 .env
 .env.*
