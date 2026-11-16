@@ -8,7 +8,7 @@
 #include "vCSSubSegment.h"
 #include "vCSEntity.h"
 #include "vCSWeld.h"
-#include "MultiPipeInsulation.h"
+#include "vCSInsulation.h"
 #include "ParamsObject.h"
 #include "vCSToolsStr.h"
 
@@ -1049,34 +1049,80 @@ bool CInsulDlg::AssignToPipes(AcDbObjectId idAxis, const AcDbObjectIdArray& pipe
     for (int i = 0; i < pipeIds.length(); ++i)
         SetPartInsulationOnEntity(pipeIds.at(i), thicknessMm, tMediaC, regionName, mediaName);
 
-    // MultiPipeInsulation only from subsegments
-    AcDbObjectIdArray onlySS;
+    // New MS path = PIPE_MULTIPIPE_INSULATION: CInsulModel::create_insul
+    // Creates real insulation object (CInsulModel + solids) on top of pipes.
+    AcDbObjectIdArray ents;
     for (int i = 0; i < pipeIds.length(); ++i)
+        AppendUnique(ents, pipeIds.at(i));
+
+    std::vector<AcDbObjectId> validPipes;
+    if (CInsulModel::get_valid_pipes(ents, validPipes) == Acad::eOk && !validPipes.empty())
     {
-        AcDbObject* pObj = nullptr;
-        if (acdbOpenObject(pObj, pipeIds.at(i), AcDb::kForRead) != Acad::eOk || !pObj) continue;
-        const bool isSS = pObj->isKindOf(vCSSubSegment::desc());
-        pObj->close();
-        if (isSS) onlySS.append(pipeIds.at(i));
+        ents.removeAll();
+        for (const AcDbObjectId& id : validPipes)
+            ents.append(id);
     }
-    if (onlySS.length() > 0)
+    else
     {
-        MultiPipeInsulation* pIns = new MultiPipeInsulation();
-        if (pIns)
+        std::vector<AcDbObjectId> validSegs;
+        if (CInsulModel::get_valid_segs(ents, validSegs) == Acad::eOk && !validSegs.empty())
         {
-            pIns->setFlagFull(false);
-            if (pIns->SetPipeArray(onlySS) == eMpiErrOk &&
-                pIns->ConstructFromPipes(thicknessMm, true) == eMpiErrOk &&
-                AppendToModelSpace(pIns) == Acad::eOk)
+            ents.removeAll();
+            for (const AcDbObjectId& id : validSegs)
+                ents.append(id);
+        }
+    }
+
+    if (ents.length() > 0)
+    {
+        // Lib exports create_insul(long const& flags); header Int32 may mangle as int — resolve by name.
+        using PfnCreateInsul = Acad::ErrorStatus(__cdecl*)(
+            const AcDbObjectIdArray&,
+            const long&,
+            double,
+            AcDbObjectId&,
+            double,
+            double,
+            const CElement*);
+
+        static PfnCreateInsul s_pfn = nullptr;
+        if (!s_pfn)
+        {
+            HMODULE h = ::GetModuleHandleW(L"ViperCSObj.nrx");
+            if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dbx");
+            if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dll");
+            if (h)
             {
-                pIns->close();
-            }
-            else
-            {
-                pIns->close();
-                delete pIns;
+                s_pfn = reinterpret_cast<PfnCreateInsul>(::GetProcAddress(h,
+                    "?create_insul@CInsulModel@@SA?AW4ErrorStatus@Nano@@"
+                    "AEBV?$NcArray@VNcDbObjectId@@V?$HostObjectsAllocator@VNcDbObjectId@@@@@@"
+                    "AEBJNAEAVNcDbObjectId@@NNPEBVCElement@@@Z"));
             }
         }
+
+        long flags = (long)CInsulModel::n_InsulFull;
+        if (writeAxisLevel)
+            flags |= (long)CInsulModel::n_InsulParallel;
+
+        AcDbObjectId idModel;
+        Acad::ErrorStatus es = Acad::eInvalidInput;
+        if (s_pfn)
+        {
+            es = s_pfn(ents, flags, thicknessMm, idModel, 0.0, 5.0, nullptr);
+            if (es != Acad::eOk)
+                es = s_pfn(ents, flags, thicknessMm * 0.001, idModel, 0.0, 5.0, nullptr);
+        }
+        else
+        {
+            acutPrintf(L"\n[PIPE_INSUL] create_insul export not found in ViperCSObj\n");
+        }
+
+        if (es == Acad::eOk && !idModel.isNull())
+            acutPrintf(L"\n[PIPE_INSUL] CInsulModel::create_insul OK delta=%.0f mm ents=%d model=%lu\n",
+                thicknessMm, ents.length(), (unsigned long)idModel.asOldId());
+        else
+            acutPrintf(L"\n[PIPE_INSUL] CInsulModel::create_insul FAIL es=%d ents=%d pfn=%p\n",
+                (int)es, ents.length(), (void*)s_pfn);
     }
     return pipeIds.length() > 0;
 }

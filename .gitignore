@@ -27,7 +27,12 @@ trash-x64/
 ipch/
 *.vsidx
 
-# Secrets / local env
+# Old deploy snapshots in root (keep only deploy/)
+HelloNRX_*.nrx
+PIPE_ALIGN_crash.log
+_exports_new.txt
+
+# Secrets
 .env
 .env.*
 *.pem
