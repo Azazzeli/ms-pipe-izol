@@ -288,14 +288,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="AlignDlg.h" />
     <ClInclude Include="InsulDlg.h" />
     <ClInclude Include="InsulCalc.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HelloNRX.cpp" />
-    <ClCompile Include="AlignDlg.cpp" />
     <ClCompile Include="InsulDlg.cpp" />
     <ClCompile Include="InsulCalc.cpp" />
     <ClCompile Include="stdafx.cpp">

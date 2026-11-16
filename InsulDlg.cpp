@@ -4,6 +4,7 @@
 #include "dbapserv.h"
 
 #include "vCSAxis.h"
+#include "vCSObject.h"
 #include "vCSSegment.h"
 #include "vCSSubSegment.h"
 #include "vCSEntity.h"
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <map>
+#include <memory>
 
 namespace
 {
@@ -76,59 +78,132 @@ namespace
         if (!dst.find(id, pos)) dst.append(id);
     }
 
+    void CollectAxesFromModelSpace(AcDbDatabase* pDb, AcDbObjectIdArray& axes)
+    {
+        if (!pDb) return;
+        AcDbBlockTable* pBT = nullptr;
+        if (pDb->getBlockTable(pBT, AcDb::kForRead) != Acad::eOk || !pBT) return;
+        AcDbBlockTableRecord* pMS = nullptr;
+        if (pBT->getAt(ACDB_MODEL_SPACE, pMS, AcDb::kForRead) != Acad::eOk || !pMS)
+        {
+            pBT->close();
+            return;
+        }
+        AcDbBlockTableRecordIterator* pIt = nullptr;
+        if (pMS->newIterator(pIt) == Acad::eOk && pIt)
+        {
+            for (; !pIt->done(); pIt->step())
+            {
+                AcDbObjectId id;
+                pIt->getEntityId(id);
+                AcDbObject* pObj = nullptr;
+                if (acdbOpenObject(pObj, id, AcDb::kForRead) != Acad::eOk || !pObj) continue;
+
+                if (pObj->isKindOf(vCSAxis::desc()))
+                {
+                    AppendUnique(axes, id);
+                }
+                else if (pObj->isKindOf(vCSEntity::desc()))
+                {
+                    if (vCSEntity* pE = vCSEntity::cast(pObj))
+                    {
+                        const AcDbObjectId ax = pE->GetOIdAxis();
+                        if (!ax.isNull()) AppendUnique(axes, ax);
+                    }
+                }
+                else if (pObj->isKindOf(vCSSubSegment::desc()))
+                {
+                    if (vCSSubSegment* pSS = vCSSubSegment::cast(pObj))
+                    {
+                        const AcDbObjectId ax = pSS->GetOIdAxis();
+                        if (!ax.isNull()) AppendUnique(axes, ax);
+                    }
+                }
+                pObj->close();
+            }
+            delete pIt;
+        }
+        pMS->close();
+        pBT->close();
+    }
+
+    void CollectAxesFromNodDict(AcDbDatabase* pDb, AcDbObjectIdArray& axes)
+    {
+        if (!pDb) return;
+        AcDbDictionary* pNod = nullptr;
+        if (pDb->getNamedObjectsDictionary(pNod, AcDb::kForRead) != Acad::eOk || !pNod)
+            return;
+
+        AcDbObjectId idDict;
+        // try several possible dict names
+        const wchar_t* names[] = { VCSSTR_DICTNAME_AXIS, L"Axis", L"AXIS", L"Axes" };
+        for (const wchar_t* nm : names)
+        {
+            if (pNod->getAt(nm, idDict) != Acad::eOk || idDict.isNull())
+                continue;
+            AcDbDictionary* pAxisDict = nullptr;
+            if (acdbOpenObject(pAxisDict, idDict, AcDb::kForRead) != Acad::eOk || !pAxisDict)
+                continue;
+            for (std::unique_ptr<AcDbDictionaryIterator> it(pAxisDict->newIterator());
+                it && !it->done(); it->next())
+            {
+                const AcDbObjectId id = it->objectId();
+                if (id.isNull()) continue;
+                // accept if opens as vCSAxis, or just store id
+                AppendUnique(axes, id);
+            }
+            pAxisDict->close();
+            break;
+        }
+        pNod->close();
+    }
+
     void CollectAllAxes(AcDbObjectIdArray& axes)
     {
         axes.removeAll();
         AcDbDatabase* pDb = acdbHostApplicationServices()->workingDatabase();
-        if (!pDb) return;
-
-        // Official MS API: axes live in named dictionary "Axis", not model space
-        vCSAxis::GetAllAxis(axes, pDb);
-        if (axes.length() == 0)
-            vCSAxis::GetAllAxisX(axes, pDb);
-
-        // Fallback: unique axes referenced by pipe entities in model space
-        if (axes.length() == 0)
+        if (!pDb)
         {
-            AcDbBlockTable* pBT = nullptr;
-            if (pDb->getBlockTable(pBT, AcDb::kForRead) != Acad::eOk || !pBT) return;
-            AcDbBlockTableRecord* pMS = nullptr;
-            if (pBT->getAt(ACDB_MODEL_SPACE, pMS, AcDb::kForRead) != Acad::eOk || !pMS)
-            {
-                pBT->close();
-                return;
-            }
-            AcDbBlockTableRecordIterator* pIt = nullptr;
-            if (pMS->newIterator(pIt) == Acad::eOk && pIt)
-            {
-                for (; !pIt->done(); pIt->step())
-                {
-                    AcDbObjectId id;
-                    pIt->getEntityId(id);
-                    AcDbObject* pObj = nullptr;
-                    if (acdbOpenObject(pObj, id, AcDb::kForRead) != Acad::eOk || !pObj) continue;
-                    if (pObj->isKindOf(vCSEntity::desc()))
-                    {
-                        vCSEntity* pE = vCSEntity::cast(pObj);
-                        if (pE)
-                        {
-                            const AcDbObjectId ax = pE->GetOIdAxis();
-                            if (!ax.isNull()) AppendUnique(axes, ax);
-                        }
-                    }
-                    else if (pObj->isKindOf(vCSAxis::desc()))
-                    {
-                        AppendUnique(axes, id);
-                    }
-                    pObj->close();
-                }
-                delete pIt;
-            }
-            pMS->close();
-            pBT->close();
+            acutPrintf(L"\n[PIPE_INSUL_ALL] no working database\n");
+            return;
         }
 
-        acutPrintf(L"\n[PIPE_INSUL] axes found: %d\n", axes.length());
+        // 1) MS API
+        vCSAxis::GetAllAxis(axes, pDb);
+        acutPrintf(L"\n[PIPE_INSUL_ALL] GetAllAxis=%d", axes.length());
+        if (axes.length() == 0)
+        {
+            vCSAxis::GetAllAxisX(axes, pDb);
+            acutPrintf(L" GetAllAxisX=%d", axes.length());
+        }
+
+        // 2) dictionary helper
+        {
+            AcDbObjectIdArray tmp;
+            vCSObject2::GetAllObjectsX(VCSSTR_DICTNAME_AXIS, tmp, pDb);
+            for (int i = 0; i < tmp.length(); ++i)
+                AppendUnique(axes, tmp.at(i));
+            if (tmp.length() > 0)
+                acutPrintf(L" GetAllObjectsX=%d", tmp.length());
+        }
+
+        // 3) manual NOD "Axis"
+        {
+            const int before = axes.length();
+            CollectAxesFromNodDict(pDb, axes);
+            if (axes.length() > before)
+                acutPrintf(L" NOD=%d", axes.length() - before);
+        }
+
+        // 4) always merge axes from model space pipes/subsegs
+        {
+            const int before = axes.length();
+            CollectAxesFromModelSpace(pDb, axes);
+            if (axes.length() > before)
+                acutPrintf(L" ModelSpace+=%d", axes.length() - before);
+        }
+
+        acutPrintf(L" TOTAL=%d\n", axes.length());
     }
 
     void SetPartInsulationOnEntity(AcDbObjectId id, double thicknessMm, double tMediaC,
@@ -581,22 +656,33 @@ void CInsulDlg::BuildZonesForAxis(AcDbObjectId idAxis, bool splitByWeld, std::ve
     std::sort(pipes.begin(), pipes.end(), [](const ChainPipe& a, const ChainPipe& b) { return a.pos < b.pos; });
     std::sort(welds.begin(), welds.end(), [](const ChainWeld& a, const ChainWeld& b) { return a.pos < b.pos; });
 
+    // fallback: collect pipes by axis id from model (axis may have empty GetSeg)
     if (pipes.empty())
-        return;
+    {
+        AcDbObjectIdArray fb;
+        CollectAxisSegments(idAxis, fb);
+        for (int i = 0; i < fb.length(); ++i)
+        {
+            ChainPipe cp;
+            cp.id = fb.at(i);
+            cp.pos = (double)i;
+            pipes.push_back(cp);
+        }
+    }
 
-    if (!splitByWeld || welds.empty())
+    if (!splitByWeld || welds.empty() || pipes.empty())
     {
         InsulZone z;
         z.idAxis = idAxis;
         z.axisName = axisName;
-        z.zoneName = welds.empty() ? L"вся ось" : L"вся ось (без разреза)";
+        z.zoneName = L"axis";
         z.zoneIndex = 0;
         z.zoneCount = 1;
         z.dOuterMm = dOuter;
         z.dnMm = dn;
         z.splitByWeld = false;
         for (const auto& p : pipes) z.pipeIds.append(p.id);
-        out.push_back(z);
+        out.push_back(z); // always show axis in list
         return;
     }
 
@@ -630,10 +716,27 @@ void CInsulDlg::BuildZonesForAxis(AcDbObjectId idAxis, bool splitByWeld, std::ve
             zones[zi].pipeIds.append(p.id);
     }
 
+    bool any = false;
     for (auto& z : zones)
     {
         if (z.pipeIds.length() > 0)
+        {
             out.push_back(z);
+            any = true;
+        }
+    }
+    if (!any)
+    {
+        InsulZone z;
+        z.idAxis = idAxis;
+        z.axisName = axisName;
+        z.zoneName = L"axis";
+        z.zoneIndex = 0;
+        z.zoneCount = 1;
+        z.dOuterMm = dOuter;
+        z.dnMm = dn;
+        for (const auto& p : pipes) z.pipeIds.append(p.id);
+        out.push_back(z);
     }
 }
 
