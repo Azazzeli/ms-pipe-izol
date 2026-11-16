@@ -1,48 +1,31 @@
-# Сборка и загрузка
+# Сборка MsPipeIzol
 
-## Требования
+Актуальная инструкция — в корневом [README.md](../README.md). Кратко:
 
-- Visual Studio 2022 (MSBuild 17.x)
-- SDK nanoCAD (пути в `viper_sdk_auto.props` / `all_folders.props`)
-- Заголовки/библиотеки Model Studio (`ViperCSObj.lib` и include)
+## Пути
 
-## Сборка
+Отредактируйте [`MsPipeIzol.paths.props`](../MsPipeIzol.paths.props):
 
-Из корня исходников (`src/` или `D:\WORK\SAP\HelloNRX`):
+- `NCadSdkRoot` — nanoCAD SDK  
+- `ModelStudioRoot` — исходники Model Studio  
+- `MsLibConfig` — например `Release NCAD241`
+
+Шаблон: [`MsPipeIzol.paths.props.example`](../MsPipeIzol.paths.props.example).
+
+## Команда
 
 ```bat
-msbuild HelloNRX.sln /t:Rebuild /p:Configuration="Release NCAD" /p:Platform=x64
+msbuild MsPipeIzol.sln /t:Rebuild /p:Configuration="Release NCAD" /p:Platform=x64 /p:PlatformToolset=v143
 ```
 
-Выход:
+Результат: `bin-x64\Release NCAD\MsPipeIzol.nrx` и копия в `deploy\` (PostBuild).
 
-```
-bin-x64\Release NCAD\HelloNRX.nrx
-```
+## MFC
 
-Копия в пакет:
+Нужен компонент Visual Studio **MFC** (Individual components). Без него: `MSB8041`.
 
-```
-deploy\HelloNRX.nrx
-deploy\HelloNRX_izol8.nrx
-```
+## Кодировка
 
-## Генерация props (если сменились пути SDK)
-
-```powershell
-.\Generate-ModelStudioProps.ps1
-# или
-python generate_modelstudio_props.py
-```
-
-## Загрузка в nanoCAD
-
-1. Открыть чертёж Model Studio (трубопроводы).
-2. `APPLOAD` → `HelloNRX_izol8.nrx`
-3. Проверить сообщения:
-   - `HelloNRX: PIPE_ALIGN, PIPE_INSUL, PIPE_INSUL_ALL`
-4. Выгрузка: `APPUNLOAD` того же файла.
-
-## Важно про кодировку
-
-Строки UI в `.cpp`/`.rc` должны быть в **CP1251**, не UTF-8 без BOM — иначе «кракозябры» в диалоге.
+- `.cpp` — литералы `\xXXXX`  
+- `.rc` — Windows-1251  
+- не включать `/utf-8` на весь проект

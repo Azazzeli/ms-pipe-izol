@@ -8,8 +8,11 @@
 #include "vCSSegment.h"
 #include "vCSSubSegment.h"
 #include "vCSEntity.h"
+#include "vCSNode.h"
+#include "vCSInLine.h"
 #include "vCSWeld.h"
 #include "vCSInsulation.h"
+#include "MultiPipeInsulation.h"
 #include "ParamsObject.h"
 #include "vCSToolsStr.h"
 
@@ -19,40 +22,9 @@
 
 namespace
 {
-    struct RegionDef { const wchar_t* name; double k; double tAirOut; };
-
-    const RegionDef kRegions[] = {
-        { L"CFO-MSK", 1.00, -25.0 }, { L"CFO-YAR", 1.00, -28.0 },
-        { L"SZFO-SPB", 1.00, -24.0 }, { L"SZFO-ARK", 0.96, -35.0 },
-        { L"UFO-ROST", 1.00, -19.0 }, { L"UFO-VOLG", 1.00, -22.0 },
-        { L"SKFO", 1.00, -16.0 }, { L"PFO-NN", 1.00, -30.0 },
-        { L"PFO-SAM", 1.00, -27.0 }, { L"UFO-EKB", 0.98, -32.0 },
-        { L"UFO-PERM", 0.98, -35.0 }, { L"SFO-NSK", 0.98, -37.0 },
-        { L"SFO-KRS", 0.98, -40.0 }, { L"DFO-KHB", 0.96, -28.0 },
-        { L"DFO-YKT", 0.96, -50.0 }, { L"CRIMEA", 1.00, -15.0 },
-        { L"KALIN", 1.00, -18.0 },
-    };
-
-    const wchar_t* kRegionsRu[] = {
-        L"Центральный ФО - Москва, Тула, Воронеж",
-        L"Центральный ФО - Ярославль, Тверь",
-        L"Северо-Западный ФО - Санкт-Петербург",
-        L"Северо-Западный ФО - Архангельск, Мурманск",
-        L"Южный ФО - Ростов-на-Дону, Краснодар",
-        L"Южный ФО - Волгоград, Астрахань",
-        L"Северо-Кавказский ФО - Ставрополь, Грозный",
-        L"Приволжский ФО - Нижний Новгород, Казань",
-        L"Приволжский ФО - Самара, Саратов",
-        L"Уральский ФО - Екатеринбург, Челябинск",
-        L"Уральский ФО - Пермь, Тюмень",
-        L"Сибирский ФО - Новосибирск, Омск",
-        L"Сибирский ФО - Красноярск, Иркутск",
-        L"Дальневосточный ФО - Хабаровск, Владивосток",
-        L"Дальневосточный ФО - Якутск, Магадан (Север)",
-        L"Крым / Севастополь",
-        L"Калининградская область",
-    };
-    constexpr int kRegionCount = (int)(sizeof(kRegions) / sizeof(kRegions[0]));
+    // Indoor-only (NR 34): regionK=1, tAir=25 C
+    constexpr double kIndoorRegionK = 1.0;
+    constexpr double kIndoorTAirC = 25.0;
 
     Acad::ErrorStatus AppendToModelSpace(AcDbEntity* pEnt)
     {
@@ -206,27 +178,6 @@ namespace
         acutPrintf(L" TOTAL=%d\n", axes.length());
     }
 
-    void SetPartInsulationOnEntity(AcDbObjectId id, double thicknessMm, double tMediaC,
-        const CString& regionName, const CString& mediaName)
-    {
-        vCSEntity* pEnt = nullptr;
-        if (acdbOpenObject(pEnt, id, AcDb::kForWrite) != Acad::eOk || !pEnt)
-            return;
-        CString sD, sT;
-        sD.Format(L"%.0f", thicknessMm);
-        sT.Format(L"%.1f", tMediaC);
-        if (CElement* pEl = pEnt->getRootElement())
-        {
-            pEl->SetParameter(VCSSTR_PP_INSULATION_THICKNESS, sD, L"Tolshchina", L"mm");
-            pEl->SetParameter(VCSSTR_PP_INSULATION_DISABLEVIEW, L"0", L"", L"");
-            pEl->SetParameter(L"TEMPERATURE", sT, L"Temperatura", L"C");
-            pEl->SetParameter(L"REGION", regionName, L"Region", L"");
-            pEl->SetParameter(L"INSUL_MEDIA", mediaName, L"Sreda", L"");
-        }
-        pEnt->updateElements(true);
-        pEnt->close();
-    }
-
     struct ChainPipe { AcDbObjectId id; double pos; };
     struct ChainWeld { AcDbObjectId id; double pos; };
 
@@ -244,8 +195,6 @@ namespace
     }
 }
 
-CInsulDlg* CInsulDlg::s_pInstance = nullptr;
-
 CInsulDlg::CInsulDlg(AcDbObjectId idAxis, InsulDlgMode mode, CWnd* pParent)
     : CDialog(IDD_INSUL, pParent)
     , m_mode(mode)
@@ -253,25 +202,11 @@ CInsulDlg::CInsulDlg(AcDbObjectId idAxis, InsulDlgMode mode, CWnd* pParent)
 {
 }
 
-bool CInsulDlg::ShowModeless(AcDbObjectId idAxis, InsulDlgMode mode, CWnd* pParent)
+INT_PTR CInsulDlg::ShowModal(AcDbObjectId idAxis, InsulDlgMode mode, CWnd* pParent)
 {
     AFX_MANAGE_STATE(AfxGetStaticModuleState());
-    if (s_pInstance)
-    {
-        s_pInstance->ClearHighlight();
-        s_pInstance->DestroyWindow();
-        s_pInstance = nullptr;
-    }
-    CInsulDlg* pDlg = new CInsulDlg(idAxis, mode, pParent);
-    if (!pDlg->Create(IDD_INSUL, pParent))
-    {
-        delete pDlg;
-        return false;
-    }
-    s_pInstance = pDlg;
-    pDlg->ShowWindow(SW_SHOW);
-    pDlg->SetActiveWindow();
-    return true;
+    CInsulDlg dlg(idAxis, mode, pParent);
+    return dlg.DoModal();
 }
 
 void CInsulDlg::DoDataExchange(CDataExchange* pDX)
@@ -283,7 +218,6 @@ BEGIN_MESSAGE_MAP(CInsulDlg, CDialog)
     ON_BN_CLICKED(IDC_INSUL_BTN_CALC, &CInsulDlg::OnBnCalculate)
     ON_BN_CLICKED(IDC_INSUL_BTN_ASSIGN, &CInsulDlg::OnBnAssign)
     ON_CBN_SELCHANGE(IDC_INSUL_CMB_MEDIA, &CInsulDlg::OnCbnChange)
-    ON_NOTIFY(TCN_SELCHANGE, IDC_INSUL_TAB, &CInsulDlg::OnTabChange)
     ON_BN_CLICKED(IDC_INSUL_BTN_REFRESH, &CInsulDlg::OnBnRefreshZones)
     ON_BN_CLICKED(IDC_INSUL_BTN_CALC_ALL, &CInsulDlg::OnBnCalcAll)
     ON_BN_CLICKED(IDC_INSUL_BTN_ASSIGN_ALL, &CInsulDlg::OnBnAssignAll)
@@ -292,7 +226,6 @@ BEGIN_MESSAGE_MAP(CInsulDlg, CDialog)
     ON_BN_CLICKED(IDC_INSUL_BTN_SEL_NONE, &CInsulDlg::OnBnSelNone)
     ON_BN_CLICKED(IDC_INSUL_CHK_SPLIT_WELD, &CInsulDlg::OnBnRefreshZones)
     ON_NOTIFY(LVN_ITEMCHANGED, IDC_INSUL_LIST_ZONES, &CInsulDlg::OnZoneItemChanged)
-    ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
 void CInsulDlg::ClearHighlight()
@@ -364,77 +297,51 @@ void CInsulDlg::HighlightAxis(AcDbObjectId idAxis)
 
 void CInsulDlg::OnOK()
 {
-    // modeless: ignore Enter as OK
+    // Keep dialog open; Close button uses IDCANCEL
 }
 
 void CInsulDlg::OnCancel()
 {
     ClearHighlight();
-    DestroyWindow();
+    CDialog::OnCancel();
 }
 
-void CInsulDlg::OnClose()
+void CInsulDlg::FillMediaCombos()
 {
-    ClearHighlight();
-    DestroyWindow();
-}
-
-void CInsulDlg::PostNcDestroy()
-{
-    ClearHighlight();
-    CDialog::PostNcDestroy();
-    if (s_pInstance == this)
-        s_pInstance = nullptr;
-    delete this;
-}
-
-void CInsulDlg::FillRegionMediaCombos()
-{
-    auto fillReg = [&](int idc)
-    {
-        CComboBox* p = (CComboBox*)GetDlgItem(idc);
-        if (!p) return;
-        p->ResetContent();
-        for (int i = 0; i < kRegionCount; ++i)
-            p->AddString(kRegionsRu[i]);
-        p->SetCurSel(0);
-    };
     auto fillMed = [&](int idc)
     {
         CComboBox* p = (CComboBox*)GetDlgItem(idc);
         if (!p) return;
         p->ResetContent();
-        p->AddString(L"Вода (котловая / теплосеть)");
-        p->AddString(L"Пар");
+        p->AddString(L"\x0412\x043E\x0434\x0430\x0020\x0028\x043A\x043E\x0442\x043B\x043E\x0432\x0430\x044F\x0020\x002F\x0020\x0442\x0435\x043F\x043B\x043E\x0441\x0435\x0442\x044C\x0029");
+        p->AddString(L"\x041F\x0430\x0440");
         p->SetCurSel(0);
     };
-    fillReg(IDC_INSUL_CMB_REGION);
-    fillReg(IDC_INSUL_CMB_REGION2);
     fillMed(IDC_INSUL_CMB_MEDIA);
     fillMed(IDC_INSUL_CMB_MEDIA2);
 }
 
-void CInsulDlg::ShowTab(int tab)
+void CInsulDlg::ApplyModeLayout()
 {
-    m_curTab = tab;
-    const bool t0 = (tab == 0);
-    const int tab0[] = {
-        IDC_INSUL_CMB_REGION, IDC_INSUL_CMB_MEDIA, IDC_INSUL_EDIT_T,
-        IDC_INSUL_STATIC_D, IDC_INSUL_BTN_CALC, IDC_INSUL_BTN_ASSIGN,
-        IDC_INSUL_STATIC_RESULT, IDC_INSUL_EDIT_REPORT
+    const bool single = (m_mode == InsulDlgMode::SingleAxis);
+    const int singleIds[] = {
+        IDC_INSUL_STATIC_LBL_MEDIA, IDC_INSUL_CMB_MEDIA, IDC_INSUL_STATIC_LBL_T, IDC_INSUL_EDIT_T,
+        IDC_INSUL_BTN_CALC, IDC_INSUL_BTN_ASSIGN, IDC_INSUL_STATIC_RESULT, IDC_INSUL_EDIT_REPORT
     };
-    const int tab1[] = {
+    const int allIds[] = {
         IDC_INSUL_LIST_ZONES, IDC_INSUL_CHK_SPLIT_WELD,
-        IDC_INSUL_CMB_REGION2, IDC_INSUL_CMB_MEDIA2, IDC_INSUL_EDIT_T2,
+        IDC_INSUL_STATIC_LBL_MEDIA2, IDC_INSUL_CMB_MEDIA2, IDC_INSUL_STATIC_LBL_T2, IDC_INSUL_EDIT_T2,
         IDC_INSUL_BTN_APPLY_ROW, IDC_INSUL_BTN_REFRESH,
         IDC_INSUL_BTN_SEL_ALL, IDC_INSUL_BTN_SEL_NONE,
         IDC_INSUL_BTN_CALC_ALL, IDC_INSUL_BTN_ASSIGN_ALL, IDC_INSUL_STATIC_BATCH
     };
-    for (int id : tab0)
-        if (CWnd* w = GetDlgItem(id)) w->ShowWindow(t0 ? SW_SHOW : SW_HIDE);
-    // groupbox "Polnyy raschet" is IDC_STATIC near report - hide siblings carefully
-    for (int id : tab1)
-        if (CWnd* w = GetDlgItem(id)) w->ShowWindow(t0 ? SW_HIDE : SW_SHOW);
+    for (int id : singleIds)
+        if (CWnd* w = GetDlgItem(id)) w->ShowWindow(single ? SW_SHOW : SW_HIDE);
+    for (int id : allIds)
+        if (CWnd* w = GetDlgItem(id)) w->ShowWindow(single ? SW_HIDE : SW_SHOW);
+
+    SetDlgItemText(IDC_INSUL_STATIC_TITLE,
+        single ? L"\x0420\x0435\x0436\x0438\x043C\x003A\x0020\x043E\x0434\x043D\x0430\x0020\x043E\x0441\x044C" : L"\x0420\x0435\x0436\x0438\x043C\x003A\x0020\x0432\x0441\x0435\x0020\x043E\x0441\x0438\x0020\x002F\x0020\x0437\x043E\x043D\x044B");
 }
 
 BOOL CInsulDlg::OnInitDialog()
@@ -444,66 +351,51 @@ BOOL CInsulDlg::OnInitDialog()
     if (!m_idAxis.isNull())
         ReadDiameters(m_idAxis, m_dOuterMm, m_dnMm);
 
-    m_tab.SubclassDlgItem(IDC_INSUL_TAB, this);
-    m_tab.InsertItem(0, L"Текущая ось");
-    m_tab.InsertItem(1, L"Все оси / зоны");
-
     m_listZones.SubclassDlgItem(IDC_INSUL_LIST_ZONES, this);
     m_listZones.SetExtendedStyle(LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES | LVS_EX_GRIDLINES);
-    m_listZones.InsertColumn(0, L"Ось", LVCFMT_LEFT, 140);
-    m_listZones.InsertColumn(1, L"Зона", LVCFMT_LEFT, 150);
-    m_listZones.InsertColumn(2, L"Dnar", LVCFMT_RIGHT, 55);
-    m_listZones.InsertColumn(3, L"Среда", LVCFMT_LEFT, 55);
-    m_listZones.InsertColumn(4, L"t C", LVCFMT_RIGHT, 50);
-    m_listZones.InsertColumn(5, L"delta мм", LVCFMT_RIGHT, 60);
-    m_listZones.InsertColumn(6, L"труб", LVCFMT_RIGHT, 45);
+    m_listZones.InsertColumn(0, L"\x041E\x0441\x044C", LVCFMT_LEFT, 150);
+    m_listZones.InsertColumn(1, L"\x0417\x043E\x043D\x0430", LVCFMT_LEFT, 160);
+    m_listZones.InsertColumn(2, L"\x0044\x043D\x0430\x0440", LVCFMT_RIGHT, 55);
+    m_listZones.InsertColumn(3, L"\x0421\x0440\x0435\x0434\x0430", LVCFMT_LEFT, 55);
+    m_listZones.InsertColumn(4, L"\x0074\x0020\x0043", LVCFMT_RIGHT, 50);
+    m_listZones.InsertColumn(5, L"\x0064\x0065\x006C\x0074\x0061\x0020\x043C\x043C", LVCFMT_RIGHT, 55);
+    m_listZones.InsertColumn(6, L"\x0442\x0440\x0443\x0431", LVCFMT_RIGHT, 45);
 
-    FillRegionMediaCombos();
+    FillMediaCombos();
     SetDlgItemText(IDC_INSUL_EDIT_T, L"90");
     SetDlgItemText(IDC_INSUL_EDIT_T2, L"90");
     if (CButton* b = (CButton*)GetDlgItem(IDC_INSUL_CHK_SPLIT_WELD))
         b->SetCheck(BST_CHECKED);
 
     CString s;
-    s.Format(L"Dnar=%.1f mm, DN=%.1f | NR 34, pomeshchenie", m_dOuterMm, m_dnMm);
+    if (m_mode == InsulDlgMode::SingleAxis)
+        s.Format(L"\x0044\x043D\x0430\x0440\x003D\x0025\x002E\x0031\x0066\x0020\x043C\x043C\x002C\x0020\x0044\x004E\x003D\x0025\x002E\x0031\x0066\x0020\x0020\x007C\x0020\x0020\x041D\x0420\x0020\x0033\x0034\x002C\x0020\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x002C\x0020\x0074\x0432\x043E\x0437\x0434\x003D\x0032\x0035\x0020\x0043", m_dOuterMm, m_dnMm);
+    else
+        s = L"\x041D\x0420\x0020\x0033\x0034\x002C\x0020\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x002C\x0020\x0074\x0432\x043E\x0437\x0434\x003D\x0032\x0035\x0020\x0043\x0020\x0020\x007C\x0020\x0020\x043E\x0442\x043C\x0435\x0442\x044C\x0442\x0435\x0020\x043E\x0441\x0438\x002F\x0437\x043E\x043D\x044B";
     SetDlgItemText(IDC_INSUL_STATIC_D, s);
     SetDlgItemText(IDC_INSUL_EDIT_REPORT,
-        L"Вкладка 1: расчёт текущей оси.\r\n"
-        L"Вкладка 2: все осевые, t/среда по зонам.\r\n"
-        L"Разрез по сварному шву (Weld): до/после — разные t.");
+        L"\x0420\x0430\x0441\x0447\x0451\x0442\x0020\x043F\x043E\x0020\x041D\x0420\x0020\x0033\x0034\x002D\x0037\x0030\x002D\x0031\x0031\x0038\x002D\x0038\x0037\x0020\x0434\x043B\x044F\x0020\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x044F\x002E" L"\r\n"
+        L"\x0420\x0435\x0433\x0438\x043E\x043D\x0020\x043D\x0435\x0020\x043D\x0443\x0436\x0435\x043D\x003A\x0020\x004B\x003D\x0031\x002C\x0020\x0074\x0020\x0432\x043E\x0437\x0434\x0443\x0445\x0430\x0020\x003D\x0020\x0032\x0035\x0020\x0043\x002E" L"\r\n"
+        L"\x0418\x0442\x043E\x0433\x0020\x0064\x0065\x006C\x0074\x0061\x0020\x003D\x0020\x006D\x0061\x0078\x0028\x043F\x043E\x0020\x0442\x0435\x043F\x043B\x043E\x043F\x043E\x0442\x0435\x0440\x044F\x043C\x0020\x0071\x002C\x0020\x043F\x043E\x0020\x0074\x0020\x043F\x043E\x0432\x0435\x0440\x0445\x043D\x043E\x0441\x0442\x0438\x0029\x002E");
     if (CWnd* b = GetDlgItem(IDC_INSUL_BTN_ASSIGN))
         b->EnableWindow(FALSE);
 
+    ApplyModeLayout();
+
     if (m_mode == InsulDlgMode::AllAxes)
     {
-        SetWindowText(L"PIPE_INSUL_ALL - vse osi (modeless)");
-        m_tab.SetCurSel(1);
-        ShowTab(1);
-        if (CWnd* w = GetDlgItem(IDC_INSUL_TAB)) w->EnableWindow(FALSE);
+        SetWindowText(L"\x004D\x0073\x0050\x0069\x0070\x0065\x0049\x007A\x006F\x006C\x0020\x2014\x0020\x0432\x0441\x0435\x0020\x043E\x0441\x0438\x0020\x0028\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x0029");
         RebuildZones();
         if (!m_zones.empty())
             HighlightAxis(m_zones[0].idAxis);
     }
     else
     {
-        SetWindowText(L"PIPE_INSUL - odna os (modeless)");
-        m_tab.SetCurSel(0);
-        ShowTab(0);
-        if (CWnd* w = GetDlgItem(IDC_INSUL_TAB)) w->EnableWindow(FALSE);
+        SetWindowText(L"\x004D\x0073\x0050\x0069\x0070\x0065\x0049\x007A\x006F\x006C\x0020\x2014\x0020\x043E\x0434\x043D\x0430\x0020\x043E\x0441\x044C\x0020\x0028\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x0029");
         if (!m_idAxis.isNull())
             HighlightAxis(m_idAxis);
     }
     return TRUE;
-}
-
-void CInsulDlg::OnTabChange(NMHDR*, LRESULT* pResult)
-{
-    // mode locks the tab; keep selection in sync
-    const int want = (m_mode == InsulDlgMode::AllAxes) ? 1 : 0;
-    if (m_tab.GetCurSel() != want)
-        m_tab.SetCurSel(want);
-    ShowTab(want);
-    *pResult = 0;
 }
 
 void CInsulDlg::OnCbnChange()
@@ -543,7 +435,7 @@ void CInsulDlg::ReadDiameters(AcDbObjectId idAxis, double& dOuter, double& dn) c
 
 CString CInsulDlg::AxisDisplayName(AcDbObjectId idAxis) const
 {
-    CString name = L"Ось";
+    CString name = L"\x041E\x0441\x044C";
     vCSAxis* pAx = nullptr;
     if (acdbOpenObject(pAx, idAxis, AcDb::kForRead) == Acad::eOk && pAx)
     {
@@ -699,11 +591,11 @@ void CInsulDlg::BuildZonesForAxis(AcDbObjectId idAxis, bool splitByWeld, std::ve
         zones[zi].dnMm = dn;
         zones[zi].splitByWeld = true;
         if (zi == 0)
-            zones[zi].zoneName.Format(L"до шва 1 / %d", nZones);
+            zones[zi].zoneName.Format(L"\x0434\x043E\x0020\x0448\x0432\x0430\x0020\x0031\x0020\x002F\x0020\x0025\x0064", nZones);
         else if (zi == nZones - 1)
-            zones[zi].zoneName.Format(L"после шва %d / %d", (int)welds.size(), nZones);
+            zones[zi].zoneName.Format(L"\x043F\x043E\x0441\x043B\x0435\x0020\x0448\x0432\x0430\x0020\x0025\x0064\x0020\x002F\x0020\x0025\x0064", (int)welds.size(), nZones);
         else
-            zones[zi].zoneName.Format(L"между швами %d-%d", zi, zi + 1);
+            zones[zi].zoneName.Format(L"\x043C\x0435\x0436\x0434\x0443\x0020\x0448\x0432\x0430\x043C\x0438\x0020\x0025\x0064\x002D\x0025\x0064", zi, zi + 1);
     }
 
     size_t wi = 0;
@@ -781,7 +673,7 @@ void CInsulDlg::RebuildZones()
 
     FillZoneList();
     CString msg;
-    msg.Format(L"Осей/зон: %d (разрез по Weld: %s)", (int)m_zones.size(), split ? L"??" : L"???");
+    msg.Format(L"\x0417\x043E\x043D\x002F\x043E\x0441\x0435\x0439\x003A\x0020\x0025\x0064\x0020\x0028\x0440\x0430\x0437\x0440\x0435\x0437\x0020\x043F\x043E\x0020\x0057\x0065\x006C\x0064\x003A\x0020\x0025\x0073\x0029", (int)m_zones.size(), split ? L"\x0434\x0430" : L"\x043D\x0435\x0442");
     SetDlgItemText(IDC_INSUL_STATIC_BATCH, msg);
 }
 
@@ -795,7 +687,7 @@ void CInsulDlg::FillZoneList()
         m_listZones.SetItemText(row, 1, z.zoneName);
         CString s;
         s.Format(L"%.0f", z.dOuterMm); m_listZones.SetItemText(row, 2, s);
-        m_listZones.SetItemText(row, 3, z.mediaIdx == 1 ? L"Пар" : L"Вода");
+        m_listZones.SetItemText(row, 3, z.mediaIdx == 1 ? L"\x041F\x0430\x0440" : L"\x0412\x043E\x0434\x0430");
         s.Format(L"%.1f", z.tMediaC); m_listZones.SetItemText(row, 4, s);
         if (z.calculated) s.Format(L"%.0f", z.deltaMm); else s = L"-";
         m_listZones.SetItemText(row, 5, s);
@@ -870,7 +762,7 @@ void CInsulDlg::OnBnApplyRow()
     double t = _wtof(tStr);
     if (t < -50 || t > 700)
     {
-        AfxMessageBox(L"Проверьте данные.", MB_ICONWARNING);
+        AfxMessageBox(L"\x041F\x0440\x043E\x0432\x0435\x0440\x044C\x0442\x0435\x0020\x0434\x0430\x043D\x043D\x044B\x0435\x002E", MB_ICONWARNING);
         return;
     }
     CComboBox* pMed = (CComboBox*)GetDlgItem(IDC_INSUL_CMB_MEDIA2);
@@ -886,16 +778,13 @@ void CInsulDlg::OnBnApplyRow()
     }
     FillZoneList();
     CString msg;
-    msg.Format(L"Применено t=%.1f к %d зонам. Пересчитайте.", t, n);
+    msg.Format(L"\x041F\x0440\x0438\x043C\x0435\x043D\x0435\x043D\x043E\x0020\x0074\x003D\x0025\x002E\x0031\x0066\x0020\x043A\x0020\x0025\x0064\x0020\x0437\x043E\x043D\x0430\x043C\x002E\x0020\x041F\x0435\x0440\x0435\x0441\x0447\x0438\x0442\x0430\x0439\x0442\x0435\x002E", t, n);
     SetDlgItemText(IDC_INSUL_STATIC_BATCH, msg);
 }
 
 void CInsulDlg::OnBnCalcAll()
 {
     SyncZoneFromListChecks();
-    CComboBox* pReg = (CComboBox*)GetDlgItem(IDC_INSUL_CMB_REGION2);
-    int iReg = pReg ? pReg->GetCurSel() : 0;
-    if (iReg < 0 || iReg >= kRegionCount) iReg = 0;
 
     int nOk = 0;
     for (auto& z : m_zones)
@@ -907,12 +796,12 @@ void CInsulDlg::OnBnCalcAll()
         in.dOuterMm = z.dOuterMm;
         in.dnMm = z.dnMm;
         in.tMediaC = z.tMediaC;
-        in.tAirC = 25.0;
+        in.tAirC = kIndoorTAirC;
         in.alpha = 10.0;
         in.kLoss = (z.dnMm < 150.0) ? 1.20 : 1.15;
         in.lambda = 0.049;
         in.hoursOver5000 = true;
-        in.regionK = kRegions[iReg].k;
+        in.regionK = kIndoorRegionK;
         const InsulCalc::Result r = InsulCalc::Calculate(in);
         if (r.ok)
         {
@@ -928,106 +817,126 @@ void CInsulDlg::OnBnCalcAll()
     }
     FillZoneList();
     CString msg;
-    msg.Format(L"Рассчитано зон: %d", nOk);
+    msg.Format(L"\x0420\x0430\x0441\x0441\x0447\x0438\x0442\x0430\x043D\x043E\x0020\x0437\x043E\x043D\x003A\x0020\x0025\x0064", nOk);
     SetDlgItemText(IDC_INSUL_STATIC_BATCH, msg);
 }
 
 void CInsulDlg::OnBnAssignAll()
 {
     SyncZoneFromListChecks();
-    CComboBox* pReg = (CComboBox*)GetDlgItem(IDC_INSUL_CMB_REGION2);
-    int iReg = pReg ? pReg->GetCurSel() : 0;
-    if (iReg < 0 || iReg >= kRegionCount) iReg = 0;
-    const CString regionName = kRegionsRu[iReg];
 
-    // count zones per axis for writeAxisLevel decision
-    std::map<Adesk::IntDbId, int> axisZones;
+    // auto-calc selected zones if needed
+    bool needCalc = false;
     for (const auto& z : m_zones)
     {
-        if (!z.selected || !z.calculated) continue;
-        axisZones[z.idAxis.asOldId()]++;
+        if (z.selected && !z.calculated)
+        {
+            needCalc = true;
+            break;
+        }
+    }
+    if (needCalc)
+        OnBnCalcAll();
+
+    // one assign per axis (full route: pipes + elbows), use max delta among selected zones
+    struct AxisJob
+    {
+        AcDbObjectId idAxis;
+        double deltaMm = 0;
+        double tMediaC = 90;
+        int mediaIdx = 0;
+        AcDbObjectIdArray pipeIds;
+    };
+    std::map<Adesk::IntDbId, AxisJob> jobs;
+    for (const auto& z : m_zones)
+    {
+        if (!z.selected || !z.calculated || z.deltaMm <= 0 || z.idAxis.isNull())
+            continue;
+        AxisJob& j = jobs[z.idAxis.asOldId()];
+        j.idAxis = z.idAxis;
+        if (z.deltaMm > j.deltaMm)
+        {
+            j.deltaMm = z.deltaMm;
+            j.tMediaC = z.tMediaC;
+            j.mediaIdx = z.mediaIdx;
+        }
+        for (int i = 0; i < z.pipeIds.length(); ++i)
+            AppendUnique(j.pipeIds, z.pipeIds.at(i));
     }
 
     int nAssign = 0;
-    for (auto& z : m_zones)
+    for (auto& kv : jobs)
     {
-        if (!z.selected || !z.calculated || z.deltaMm <= 0) continue;
-        const CString media = (z.mediaIdx == 1) ? L"Пар" : L"Вода";
-        const bool singleZoneOnAxis = (axisZones[z.idAxis.asOldId()] <= 1);
-        if (AssignToPipes(z.idAxis, z.pipeIds, z.deltaMm, z.tMediaC, regionName, media, singleZoneOnAxis))
+        AxisJob& j = kv.second;
+        if (AssignToPipes(j.idAxis, j.pipeIds, j.deltaMm, true))
             ++nAssign;
     }
 
     CString msg;
-    msg.Format(L"Назначено зон: %d", nAssign);
+    msg.Format(L"\x041D\x0430\x0437\x043D\x0430\x0447\x0435\x043D\x043E\x0020\x043E\x0441\x0435\x0439\x003A\x0020\x0025\x0064", nAssign);
     SetDlgItemText(IDC_INSUL_STATIC_BATCH, msg);
-    AfxMessageBox(msg, MB_ICONINFORMATION);
+    AfxMessageBox(msg, nAssign > 0 ? MB_ICONINFORMATION : MB_ICONWARNING);
 }
 
-bool CInsulDlg::ReadUi(InsulCalc::Input& in, CString& mediaName, CString& regionName) const
+bool CInsulDlg::ReadUi(InsulCalc::Input& in, CString& mediaName) const
 {
-    CComboBox* pReg = (CComboBox*)GetDlgItem(IDC_INSUL_CMB_REGION);
     CComboBox* pMed = (CComboBox*)GetDlgItem(IDC_INSUL_CMB_MEDIA);
-    int iReg = pReg ? pReg->GetCurSel() : 0;
     int iMed = pMed ? pMed->GetCurSel() : 0;
-    if (iReg < 0 || iReg >= kRegionCount) iReg = 0;
     if (iMed < 0) iMed = 0;
     CString tStr;
     GetDlgItemText(IDC_INSUL_EDIT_T, tStr);
     const double t = _wtof(tStr);
     if (t < -50.0 || t > 700.0) return false;
-    regionName = kRegionsRu[iReg];
-    mediaName = (iMed == 1) ? L"Пар" : L"Вода";
+    mediaName = (iMed == 1) ? L"\x041F\x0430\x0440" : L"\x0412\x043E\x0434\x0430";
     in = InsulCalc::Input{};
     in.norm = InsulCalc::Norm::Nr34;
     in.loc = InsulCalc::Location::Indoor;
     in.dOuterMm = m_dOuterMm;
     in.dnMm = m_dnMm;
     in.tMediaC = t;
-    in.tAirC = 25.0;
+    in.tAirC = kIndoorTAirC;
     in.alpha = 10.0;
     in.kLoss = (m_dnMm < 150.0) ? 1.20 : 1.15;
     in.lambda = 0.049;
     in.hoursOver5000 = true;
-    in.regionK = kRegions[iReg].k;
+    in.regionK = kIndoorRegionK;
     return true;
 }
 
 void CInsulDlg::ShowResult(const InsulCalc::Input& in, const InsulCalc::Result& r,
-    const CString& mediaName, const CString& regionName)
+    const CString& mediaName)
 {
     CString ru;
     ru.Format(
-        L"=== RASCHET (KOTLY, NR 34) ===\r\n"
-        L"Region: %s (K=%.2f)\r\n"
-        L"Sreda: %s, t=%.1f C | Dnar=%.1f DN=%.1f | Kop=%0.2f\r\n"
-        L"q=%.2f | dq=%.1f | doz=%.1f | crit=%s\r\n"
-        L"ITOGO delta = %.0f mm\r\n",
-        static_cast<LPCWSTR>(regionName), in.regionK,
+        L"\x003D\x003D\x003D\x0020\x0420\x0410\x0421\x0427\x0401\x0422\x0020\x0028\x041D\x0420\x0020\x0033\x0034\x002C\x0020\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x0029\x0020\x003D\x003D\x003D" L"\r\n"
+        L"\x0420\x0430\x0441\x043F\x043E\x043B\x043E\x0436\x0435\x043D\x0438\x0435\x003A\x0020\x043F\x043E\x043C\x0435\x0449\x0435\x043D\x0438\x0435\x0020\x0028\x004B\x003D\x0025\x002E\x0032\x0066\x002C\x0020\x0074\x0432\x043E\x0437\x0434\x003D\x0025\x002E\x0030\x0066\x0020\x0043\x0029" L"\r\n"
+        L"\x0421\x0440\x0435\x0434\x0430\x003A\x0020\x0025\x0073\x002C\x0020\x0074\x003D\x0025\x002E\x0031\x0066\x0020\x0043\x0020\x007C\x0020\x0044\x043D\x0430\x0440\x003D\x0025\x002E\x0031\x0066\x0020\x0044\x004E\x003D\x0025\x002E\x0031\x0066\x0020\x007C\x0020\x004B\x043E\x043F\x003D\x0025\x002E\x0032\x0066" L"\r\n"
+        L"\x0071\x003D\x0025\x002E\x0032\x0066\x0020\x0412\x0442\x002F\x043C\x0020\x007C\x0020\x0064\x0071\x003D\x0025\x002E\x0031\x0066\x0020\x007C\x0020\x0064\x0074\x0073\x003D\x0025\x002E\x0031\x0066\x0020\x007C\x0020\x043A\x0440\x0438\x0442\x0435\x0440\x0438\x0439\x003A\x0020\x0025\x0073" L"\r\n"
+        L"\x0418\x0422\x041E\x0413\x041E\x0020\x0064\x0065\x006C\x0074\x0061\x0020\x003D\x0020\x0025\x002E\x0030\x0066\x0020\x043C\x043C" L"\r\n",
+        in.regionK, in.tAirC,
         static_cast<LPCWSTR>(mediaName), in.tMediaC, in.dOuterMm, in.dnMm, in.kLoss,
         r.qNormWm, r.deltaQMm, r.deltaTsMm, r.criterion,
         r.deltaMm);
     SetDlgItemText(IDC_INSUL_EDIT_REPORT, ru);
     CString big;
-    big.Format(L"Itogovaya tolshchina: %.0f mm", r.deltaMm);
+    big.Format(L"\x0418\x0442\x043E\x0433\x043E\x0432\x0430\x044F\x0020\x0442\x043E\x043B\x0449\x0438\x043D\x0430\x003A\x0020\x0025\x002E\x0030\x0066\x0020\x043C\x043C", r.deltaMm);
     SetDlgItemText(IDC_INSUL_STATIC_RESULT, big);
 }
 
 void CInsulDlg::OnBnCalculate()
 {
     InsulCalc::Input in;
-    CString mediaName, regionName;
-    if (!ReadUi(in, mediaName, regionName))
+    CString mediaName;
+    if (!ReadUi(in, mediaName))
     {
-        AfxMessageBox(L"Проверьте данные.", MB_ICONWARNING);
+        AfxMessageBox(L"\x041F\x0440\x043E\x0432\x0435\x0440\x044C\x0442\x0435\x0020\x0434\x0430\x043D\x043D\x044B\x0435\x0020\x0028\x0442\x0435\x043C\x043F\x0435\x0440\x0430\x0442\x0443\x0440\x0430\x0029\x002E", MB_ICONWARNING);
         return;
     }
     m_last = InsulCalc::Calculate(in);
     m_hasResult = m_last.ok;
     m_lastT = in.tMediaC;
-    m_lastRegion = regionName;
     m_lastMedia = mediaName;
-    ShowResult(in, m_last, mediaName, regionName);
+    ShowResult(in, m_last, mediaName);
     if (CWnd* b = GetDlgItem(IDC_INSUL_BTN_ASSIGN))
         b->EnableWindow(m_last.ok ? TRUE : FALSE);
 }
@@ -1039,6 +948,7 @@ bool CInsulDlg::CollectAxisSegments(AcDbObjectIdArray& pipeIds) const
 
 bool CInsulDlg::CollectAxisSegments(AcDbObjectId idAxis, AcDbObjectIdArray& pipeIds) const
 {
+    // Full route: pipes (subsegs) + elbows/nodes + inlines
     pipeIds.removeAll();
     if (idAxis.isNull()) return false;
 
@@ -1050,25 +960,51 @@ bool CInsulDlg::CollectAxisSegments(AcDbObjectId idAxis, AcDbObjectIdArray& pipe
         {
             const AcDbObjectId idSeg = pAx->GetSeg(i);
             if (idSeg.isNull()) continue;
+            AppendUnique(pipeIds, idSeg);
+
             AcDbObject* pObj = nullptr;
             if (acdbOpenObject(pObj, idSeg, AcDb::kForRead) != Acad::eOk || !pObj) continue;
             if (pObj->isKindOf(vCSSegment2::desc()))
             {
                 vCSSegment2* pSeg = vCSSegment2::cast(pObj);
-                AcDbObjectIdArray ss;
-                if (pSeg) { pSeg->SSeg_GetArr(ss); for (int j = 0; j < ss.length(); ++j) AppendUnique(pipeIds, ss.at(j)); }
+                if (pSeg)
+                {
+                    AcDbObjectIdArray ss;
+                    pSeg->SSeg_GetArr(ss);
+                    for (int j = 0; j < ss.length(); ++j)
+                        AppendUnique(pipeIds, ss.at(j));
+                    AcDbObjectIdArray ils;
+                    pSeg->GetAllInlinesSorted(ils);
+                    for (int j = 0; j < ils.length(); ++j)
+                        AppendUnique(pipeIds, ils.at(j));
+                }
             }
             else if (pObj->isKindOf(vCSSegment::desc()))
             {
                 vCSSegment* pSeg = vCSSegment::cast(pObj);
-                AcDbObjectIdArray ss;
-                if (pSeg) { pSeg->SSeg_GetArr(ss); for (int j = 0; j < ss.length(); ++j) AppendUnique(pipeIds, ss.at(j)); }
+                if (pSeg)
+                {
+                    AcDbObjectIdArray ss;
+                    pSeg->SSeg_GetArr(ss);
+                    for (int j = 0; j < ss.length(); ++j)
+                        AppendUnique(pipeIds, ss.at(j));
+                }
             }
             pObj->close();
+        }
+
+        // elbows / terminators / nodes
+        const int nNodes = pAx->GetNodesCount();
+        for (int i = 0; i < nNodes; ++i)
+        {
+            const AcDbObjectId idN = pAx->GetNode(i);
+            if (!idN.isNull())
+                AppendUnique(pipeIds, idN);
         }
         pAx->close();
     }
 
+    // model space: any entity linked to this axis
     AcDbDatabase* pDb = acdbHostApplicationServices()->workingDatabase();
     if (pDb)
     {
@@ -1087,12 +1023,27 @@ bool CInsulDlg::CollectAxisSegments(AcDbObjectId idAxis, AcDbObjectIdArray& pipe
                         pIt->getEntityId(id);
                         AcDbObject* pObj = nullptr;
                         if (acdbOpenObject(pObj, id, AcDb::kForRead) != Acad::eOk || !pObj) continue;
-                        if (pObj->isKindOf(vCSSubSegment::desc()))
+
+                        AcDbObjectId ax;
+                        if (pObj->isKindOf(vCSEntity::desc()))
                         {
-                            vCSSubSegment* pSS = vCSSubSegment::cast(pObj);
-                            if (pSS && pSS->GetOIdAxis() == idAxis)
-                                AppendUnique(pipeIds, id);
+                            if (vCSEntity* pE = vCSEntity::cast(pObj))
+                                ax = pE->GetOIdAxis();
                         }
+                        else if (pObj->isKindOf(vCSSubSegment::desc()))
+                        {
+                            if (vCSSubSegment* pSS = vCSSubSegment::cast(pObj))
+                                ax = pSS->GetOIdAxis();
+                        }
+                        else if (pObj->isKindOf(vCSNode::desc()))
+                        {
+                            // nodes: try GetOIdAxis if available via cast to entity-like API
+                            if (vCSEntity* pE = vCSEntity::cast(pObj))
+                                ax = pE->GetOIdAxis();
+                        }
+
+                        if (!ax.isNull() && ax == idAxis)
+                            AppendUnique(pipeIds, id);
                         pObj->close();
                     }
                     delete pIt;
@@ -1102,153 +1053,248 @@ bool CInsulDlg::CollectAxisSegments(AcDbObjectId idAxis, AcDbObjectIdArray& pipe
             pBT->close();
         }
     }
+
+    acutPrintf(L"\n[PIPE_INSUL] route items on axis: %d\n", pipeIds.length());
     return pipeIds.length() > 0;
 }
 
-void CInsulDlg::WriteAxisParams(double thicknessMm, double tMediaC,
-    const CString& regionName, const CString& mediaName)
-{
-    WriteAxisParams(m_idAxis, thicknessMm, tMediaC, regionName, mediaName);
-}
-
-void CInsulDlg::WriteAxisParams(AcDbObjectId idAxis, double thicknessMm, double tMediaC,
-    const CString& regionName, const CString& mediaName)
-{
-    vCSAxis* pAx = nullptr;
-    if (acdbOpenObject(pAx, idAxis, AcDb::kForWrite) != Acad::eOk || !pAx)
-        return;
-    pAx->SetInsulationThickness(thicknessMm);
-    CString sT, sD;
-    sT.Format(L"%.1f", tMediaC);
-    sD.Format(L"%.0f", thicknessMm);
-    pAx->SetParameter(VCSSTR_PP_INSULATION_THICKNESS, sD, L"Tolshchina", L"mm");
-    pAx->SetParameter(VCSSTR_PP_INSULATION_DISABLEVIEW, L"0", L"", L"");
-    pAx->SetParameter(L"TEMPERATURE", sT, L"Temperatura", L"C");
-    pAx->SetParameter(L"REGION", regionName, L"Region", L"");
-    pAx->SetParameter(L"INSUL_MEDIA", mediaName, L"Sreda", L"");
-    pAx->SetParameter(L"INSUL_NORM", L"NR 34-70-118-87", L"Norma", L"");
-    pAx->SetCElPropertyForChildren(VCSSTR_PP_INSULATION_THICKNESS, sD);
-    pAx->SetCElPropertyForChildren(VCSSTR_PP_INSULATION_DISABLEVIEW, L"0");
-    pAx->close();
-}
-
 bool CInsulDlg::AssignToPipes(AcDbObjectId idAxis, const AcDbObjectIdArray& pipeIds,
-    double thicknessMm, double tMediaC, const CString& regionName, const CString& mediaName,
-    bool writeAxisLevel)
+    double thicknessMm, bool writeAxisLevel)
 {
-    if (writeAxisLevel)
-        WriteAxisParams(idAxis, thicknessMm, tMediaC, regionName, mediaName);
-    else if (!idAxis.isNull())
-    {
-        // region on axis anyway; thickness/temp per pipes
-        vCSAxis* pAx = nullptr;
-        if (acdbOpenObject(pAx, idAxis, AcDb::kForWrite) == Acad::eOk && pAx)
-        {
-            pAx->SetParameter(L"REGION", regionName, L"Region", L"");
-            pAx->close();
-        }
-    }
+    // No axis/entity parameters вЂ” only 3D insulation objects.
 
-    for (int i = 0; i < pipeIds.length(); ++i)
-        SetPartInsulationOnEntity(pipeIds.at(i), thicknessMm, tMediaC, regionName, mediaName);
-
-    // New MS path = PIPE_MULTIPIPE_INSULATION: CInsulModel::create_insul
-    // Creates real insulation object (CInsulModel + solids) on top of pipes.
     AcDbObjectIdArray ents;
     for (int i = 0; i < pipeIds.length(); ++i)
         AppendUnique(ents, pipeIds.at(i));
 
-    std::vector<AcDbObjectId> validPipes;
-    if (CInsulModel::get_valid_pipes(ents, validPipes) == Acad::eOk && !validPipes.empty())
+    AcDbObjectIdArray elbowNodes;
+    if (!idAxis.isNull())
     {
-        ents.removeAll();
-        for (const AcDbObjectId& id : validPipes)
-            ents.append(id);
-    }
-    else
-    {
-        std::vector<AcDbObjectId> validSegs;
-        if (CInsulModel::get_valid_segs(ents, validSegs) == Acad::eOk && !validSegs.empty())
-        {
-            ents.removeAll();
-            for (const AcDbObjectId& id : validSegs)
-                ents.append(id);
-        }
-    }
+        AcDbObjectIdArray allRoute;
+        CollectAxisSegments(idAxis, allRoute);
 
-    if (ents.length() > 0)
-    {
-        // Lib exports create_insul(long const& flags); header Int32 may mangle as int — resolve by name.
-        using PfnCreateInsul = Acad::ErrorStatus(__cdecl*)(
-            const AcDbObjectIdArray&,
-            const long&,
-            double,
-            AcDbObjectId&,
-            double,
-            double,
-            const CElement*);
-
-        static PfnCreateInsul s_pfn = nullptr;
-        if (!s_pfn)
+        vCSAxis* pAx = nullptr;
+        if (acdbOpenObject(pAx, idAxis, AcDb::kForRead) == Acad::eOk && pAx)
         {
-            HMODULE h = ::GetModuleHandleW(L"ViperCSObj.nrx");
-            if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dbx");
-            if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dll");
-            if (h)
+            const int nNodes = pAx->GetNodesCount();
+            for (int i = 0; i < nNodes; ++i)
             {
-                s_pfn = reinterpret_cast<PfnCreateInsul>(::GetProcAddress(h,
-                    "?create_insul@CInsulModel@@SA?AW4ErrorStatus@Nano@@"
-                    "AEBV?$NcArray@VNcDbObjectId@@V?$HostObjectsAllocator@VNcDbObjectId@@@@@@"
-                    "AEBJNAEAVNcDbObjectId@@NNPEBVCElement@@@Z"));
+                const AcDbObjectId idN = pAx->GetNode(i);
+                if (idN.isNull()) continue;
+                vCSNode* pNode = nullptr;
+                if (acdbOpenObject(pNode, idN, AcDb::kForRead) != Acad::eOk || !pNode)
+                    continue;
+                const bool isElb = (pNode->IsElbow() != nullptr) || (pNode->IsElbowOffset() != nullptr);
+                pNode->close();
+                if (isElb)
+                {
+                    AppendUnique(elbowNodes, idN);
+                    AppendUnique(allRoute, idN);
+                }
             }
+            pAx->close();
         }
 
-        long flags = (long)CInsulModel::n_InsulFull;
-        if (writeAxisLevel)
-            flags |= (long)CInsulModel::n_InsulParallel;
-
-        AcDbObjectId idModel;
-        Acad::ErrorStatus es = Acad::eInvalidInput;
-        if (s_pfn)
-        {
-            es = s_pfn(ents, flags, thicknessMm, idModel, 0.0, 5.0, nullptr);
-            if (es != Acad::eOk)
-                es = s_pfn(ents, flags, thicknessMm * 0.001, idModel, 0.0, 5.0, nullptr);
-        }
+        if (writeAxisLevel || ents.length() == 0)
+            ents = allRoute;
         else
         {
-            acutPrintf(L"\n[PIPE_INSUL] create_insul export not found in ViperCSObj\n");
+            for (int i = 0; i < elbowNodes.length(); ++i)
+                AppendUnique(ents, elbowNodes.at(i));
         }
-
-        if (es == Acad::eOk && !idModel.isNull())
-            acutPrintf(L"\n[PIPE_INSUL] CInsulModel::create_insul OK delta=%.0f mm ents=%d model=%lu\n",
-                thicknessMm, ents.length(), (unsigned long)idModel.asOldId());
-        else
-            acutPrintf(L"\n[PIPE_INSUL] CInsulModel::create_insul FAIL es=%d ents=%d pfn=%p\n",
-                (int)es, ents.length(), (void*)s_pfn);
     }
-    return pipeIds.length() > 0;
+
+    AcDbObjectIdArray pipeEnts;
+    AcDbObjectIdArray elbowEnts;
+    {
+        std::vector<AcDbObjectId> vp, ve, vs;
+        if (CInsulModel::get_valid_pipes(ents, vp) == Acad::eOk)
+            for (const auto& id : vp) pipeEnts.append(id);
+        if (CInsulModel::get_valid_elbows(ents, ve) == Acad::eOk)
+            for (const auto& id : ve) elbowEnts.append(id);
+        if (pipeEnts.length() == 0 && CInsulModel::get_valid_segs(ents, vs) == Acad::eOk)
+            for (const auto& id : vs) pipeEnts.append(id);
+        for (int i = 0; i < elbowNodes.length(); ++i)
+            AppendUnique(elbowEnts, elbowNodes.at(i));
+        if (pipeEnts.length() == 0 && elbowEnts.length() == 0)
+            pipeEnts = ents;
+    }
+
+    acutPrintf(L"\n[PIPE_INSUL] assign ents=%d pipes=%d elbows=%d (IsElbow=%d) delta=%.0f\n",
+        ents.length(), pipeEnts.length(), elbowEnts.length(), elbowNodes.length(), thicknessMm);
+
+    HMODULE h = ::GetModuleHandleW(L"ViperCSObj.nrx");
+    if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dbx");
+    if (!h) h = ::GetModuleHandleW(L"ViperCSObj.dll");
+
+    using PfnCreateInsul = Acad::ErrorStatus(__cdecl*)(
+        const AcDbObjectIdArray&, const long&, double, AcDbObjectId&, double, double, const CElement*);
+    using PfnCreateElbow = Acad::ErrorStatus(__cdecl*)(
+        const AcDbObjectIdArray&, const long&, double, double, double);
+
+    static PfnCreateInsul s_pfnPipe = nullptr;
+    static PfnCreateElbow s_pfnElbow = nullptr;
+    static bool s_resolved = false;
+    if (h && !s_resolved)
+    {
+        s_resolved = true;
+        s_pfnPipe = reinterpret_cast<PfnCreateInsul>(::GetProcAddress(h,
+            "?create_insul@CInsulModel@@SA?AW4ErrorStatus@Nano@@"
+            "AEBV?$NcArray@VNcDbObjectId@@V?$HostObjectsAllocator@VNcDbObjectId@@@@@@"
+            "AEBJNAEAVNcDbObjectId@@NNPEBVCElement@@@Z"));
+        s_pfnElbow = reinterpret_cast<PfnCreateElbow>(::GetProcAddress(h,
+            "?create_insul_elbow@CInsulModel@@SA?AW4ErrorStatus@Nano@@"
+            "AEBV?$NcArray@VNcDbObjectId@@V?$HostObjectsAllocator@VNcDbObjectId@@@@@@"
+            "AEBJNNN@Z"));
+        acutPrintf(L"\n[PIPE_INSUL] exports pipe=%d elbow=%d\n",
+            s_pfnPipe ? 1 : 0, s_pfnElbow ? 1 : 0);
+    }
+
+    long flagsPipe = (long)CInsulModel::n_InsulFull;
+    if (writeAxisLevel)
+        flagsPipe |= (long)CInsulModel::n_InsulParallel;
+    long flagsElbow = (long)CInsulModel::n_InsulFull;
+
+    bool ok = false;
+    AcDbObjectId idModel;
+    double tickUsed = thicknessMm;
+
+    if (s_pfnPipe && pipeEnts.length() > 0)
+    {
+        Acad::ErrorStatus es = s_pfnPipe(pipeEnts, flagsPipe, thicknessMm, idModel, 0.0, 5.0, nullptr);
+        if (es != Acad::eOk)
+        {
+            tickUsed = thicknessMm * 0.001;
+            es = s_pfnPipe(pipeEnts, flagsPipe, tickUsed, idModel, 0.0, 5.0, nullptr);
+        }
+        else
+            tickUsed = thicknessMm;
+        if (es == Acad::eOk)
+        {
+            ok = true;
+            acutPrintf(L"\n[PIPE_INSUL] create_insul OK pipes=%d model=%lu tick=%.4f\n",
+                pipeEnts.length(), (unsigned long)idModel.asOldId(), tickUsed);
+        }
+        else
+            acutPrintf(L"\n[PIPE_INSUL] create_insul FAIL es=%d pipes=%d\n", (int)es, pipeEnts.length());
+    }
+    else if (!s_pfnPipe)
+        acutPrintf(L"\n[PIPE_INSUL] create_insul export missing\n");
+
+    // Elbows: one-by-one with same tick as pipes; then batch; then vCSInsulation fallback
+    bool elbowsOk = false;
+    if (elbowEnts.length() > 0 && s_pfnElbow)
+    {
+        int nOne = 0;
+        for (int i = 0; i < elbowEnts.length(); ++i)
+        {
+            AcDbObjectIdArray one;
+            one.append(elbowEnts.at(i));
+            Acad::ErrorStatus e1 = s_pfnElbow(one, flagsElbow, tickUsed, 0.0, 5.0);
+            if (e1 != Acad::eOk)
+                e1 = s_pfnElbow(one, flagsElbow, thicknessMm, 0.0, 5.0);
+            if (e1 != Acad::eOk)
+                e1 = s_pfnElbow(one, flagsElbow, thicknessMm * 0.001, 0.0, 5.0);
+            if (e1 == Acad::eOk)
+                ++nOne;
+            else
+                acutPrintf(L"\n[PIPE_INSUL] create_insul_elbow FAIL one=%d es=%d\n", i, (int)e1);
+        }
+        if (nOne > 0)
+        {
+            elbowsOk = true;
+            acutPrintf(L"\n[PIPE_INSUL] create_insul_elbow OK %d/%d\n", nOne, elbowEnts.length());
+        }
+        else
+        {
+            Acad::ErrorStatus es = s_pfnElbow(elbowEnts, flagsElbow, tickUsed, 0.0, 5.0);
+            if (es != Acad::eOk)
+                es = s_pfnElbow(elbowEnts, flagsElbow, thicknessMm * 0.001, 0.0, 5.0);
+            if (es == Acad::eOk)
+            {
+                elbowsOk = true;
+                acutPrintf(L"\n[PIPE_INSUL] create_insul_elbow batch OK elbows=%d\n", elbowEnts.length());
+            }
+            else
+                acutPrintf(L"\n[PIPE_INSUL] create_insul_elbow batch FAIL es=%d\n", (int)es);
+        }
+    }
+    else if (elbowEnts.length() > 0 && !s_pfnElbow)
+        acutPrintf(L"\n[PIPE_INSUL] create_insul_elbow export missing\n");
+
+    if (elbowEnts.length() > 0 && !elbowsOk)
+    {
+        vCSInsulation* pIns = new vCSInsulation();
+        if (AppendToModelSpace(pIns) == Acad::eOk)
+        {
+            pIns->setPipeItemReferences(elbowEnts);
+            pIns->setThickness(tickUsed);
+            pIns->setFlagFull(true);
+            EMpiError err = pIns->constructFromMultyElbows();
+            if (err != eMpiErrOk)
+            {
+                pIns->setThickness(thicknessMm * 0.001);
+                err = pIns->constructFromMultyElbows();
+            }
+            if (err != eMpiErrOk)
+                err = pIns->constructFromElbowsProjOobj();
+            pIns->close();
+            if (err == eMpiErrOk)
+            {
+                elbowsOk = true;
+                acutPrintf(L"\n[PIPE_INSUL] vCSInsulation elbows OK n=%d\n", elbowEnts.length());
+            }
+            else
+                acutPrintf(L"\n[PIPE_INSUL] vCSInsulation elbows FAIL err=%d\n", (int)err);
+        }
+        else
+            delete pIns;
+    }
+
+    if (elbowEnts.length() > 0 && !elbowsOk)
+    {
+        MultiPipeInsulation* pMp = new MultiPipeInsulation();
+        if (AppendToModelSpace(pMp) == Acad::eOk)
+        {
+            pMp->setFlagFull(true);
+            pMp->SetElbowArray(elbowEnts, tickUsed);
+            pMp->close();
+            elbowsOk = true;
+            acutPrintf(L"\n[PIPE_INSUL] MultiPipeInsulation::SetElbowArray OK n=%d\n", elbowEnts.length());
+        }
+        else
+        {
+            delete pMp;
+            acutPrintf(L"\n[PIPE_INSUL] all elbow methods FAILED\n");
+        }
+    }
+
+    if (elbowEnts.length() == 0)
+        acutPrintf(L"\n[PIPE_INSUL] no elbows (IsElbow=%d)\n", elbowNodes.length());
+
+    return ok || elbowsOk;
 }
 
-bool CInsulDlg::AssignInsulation(double thicknessMm, double tMediaC,
-    const CString& regionName, const CString& mediaName)
+bool CInsulDlg::AssignInsulation(double thicknessMm, double /*tMediaC*/, const CString& /*mediaName*/)
 {
     AcDbObjectIdArray pipeIds;
     CollectAxisSegments(m_idAxis, pipeIds);
-    return AssignToPipes(m_idAxis, pipeIds, thicknessMm, tMediaC, regionName, mediaName, true);
+    return AssignToPipes(m_idAxis, pipeIds, thicknessMm, true);
 }
 
 void CInsulDlg::OnBnAssign()
 {
     if (!m_hasResult || !m_last.ok)
     {
-        AfxMessageBox(L"Проверьте данные.", MB_ICONWARNING);
+        AfxMessageBox(L"\x0421\x043D\x0430\x0447\x0430\x043B\x0430\x0020\x0432\x044B\x043F\x043E\x043B\x043D\x0438\x0442\x0435\x0020\x0440\x0430\x0441\x0447\x0451\x0442\x002E", MB_ICONWARNING);
         return;
     }
     CString ask;
-    ask.Format(L"Назначить изоляцию %.0f мм на текущую ось?", m_last.deltaMm);
+    ask.Format(L"\x041D\x0430\x0437\x043D\x0430\x0447\x0438\x0442\x044C\x0020\x0438\x0437\x043E\x043B\x044F\x0446\x0438\x044E\x0020\x0025\x002E\x0030\x0066\x0020\x043C\x043C\x0020\x043D\x0430\x0020\x0442\x0435\x043A\x0443\x0449\x0443\x044E\x0020\x043E\x0441\x044C\x003F", m_last.deltaMm);
     if (AfxMessageBox(ask, MB_YESNO | MB_ICONQUESTION) != IDYES)
         return;
-    AssignInsulation(m_last.deltaMm, m_lastT, m_lastRegion, m_lastMedia);
-    AfxMessageBox(L"Готово.", MB_ICONINFORMATION);
+    if (AssignInsulation(m_last.deltaMm, m_lastT, m_lastMedia))
+        AfxMessageBox(L"\x0413\x043E\x0442\x043E\x0432\x043E\x002E", MB_ICONINFORMATION);
+    else
+        AfxMessageBox(L"\x041D\x0435\x0020\x0443\x0434\x0430\x043B\x043E\x0441\x044C\x0020\x043D\x0430\x0437\x043D\x0430\x0447\x0438\x0442\x044C\x0020\x0438\x0437\x043E\x043B\x044F\x0446\x0438\x044E\x002E", MB_ICONWARNING);
 }

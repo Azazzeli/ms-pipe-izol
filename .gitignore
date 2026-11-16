@@ -27,10 +27,22 @@ trash-x64/
 ipch/
 *.vsidx
 
-# Old deploy snapshots in root (keep only deploy/)
+# Local path overrides (keep .example in repo)
+# MsPipeIzol.paths.props is the editable template committed on purpose.
+# If you keep secrets/machine-only paths, use a private fork or:
+#   MsPipeIzol.paths.local.props
+
+# Old / temp artifacts
 HelloNRX_*.nrx
+*_izol*.nrx
+deploy/*_new.nrx
 PIPE_ALIGN_crash.log
-_exports_new.txt
+_exports*.txt
+_disasm.txt
+_impl_*.py
+_fix_*.py
+_write_*.py
+_patch_*.py
 
 # Secrets
 .env

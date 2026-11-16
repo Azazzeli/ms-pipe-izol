@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Скопируйте этот файл как MsPipeIzol.paths.props и подставьте свои пути:
+
+    copy MsPipeIzol.paths.props.example MsPipeIzol.paths.props
+
+  Либо правьте MsPipeIzol.paths.props напрямую (он уже в репозитории как шаблон).
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="MsPipeIzol.Paths">
+    <NCadSdkRoot>C:\Path\To\ncadsdk</NCadSdkRoot>
+    <ModelStudioRoot>C:\Path\To\Model Studio</ModelStudioRoot>
+    <MsLibConfig>Release NCAD241</MsLibConfig>
+
+    <MsSourceDir>$(ModelStudioRoot)\Source</MsSourceDir>
+    <MsCommonDir>$(ModelStudioRoot)\Common\Common_vc7</MsCommonDir>
+    <MsApiDataDir>$(ModelStudioRoot)\API\ModelStudioAPI\msData</MsApiDataDir>
+    <MsLibDir>$(MsSourceDir)\lib\VS16\$(MsLibConfig)\x64</MsLibDir>
+    <NCadSdkInclude>$(NCadSdkRoot)\include</NCadSdkInclude>
+    <NCadSdkIncludeX64>$(NCadSdkRoot)\include-x64</NCadSdkIncludeX64>
+    <NCadSdkLibX64>$(NCadSdkRoot)\lib-x64</NCadSdkLibX64>
+  </PropertyGroup>
+</Project>

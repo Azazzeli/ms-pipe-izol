@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MsPipeIzol — пути к SDK (отредактируйте под свою машину).
+
+  Что заменить:
+    NCadSdkRoot      — корень nanoCAD Object (папки include, include-x64, lib-x64)
+    ModelStudioRoot  — корень исходников Model Studio (рядом Source\, Common\, API\)
+    MsLibConfig      — имя конфигурации библиотек ViperCSObj (см. Source\lib\VS16\...)
+    PlatformToolset  — v143 = VS2022; при другой VS поменяйте в .vcxproj
+
+  Примеры:
+    <NCadSdkRoot>D:\SDK\ncadsdk</NCadSdkRoot>
+    <ModelStudioRoot>D:\SDK\Model Studio</ModelStudioRoot>
+    <MsLibConfig>Release NCAD241</MsLibConfig>
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="MsPipeIzol.Paths">
+    <!-- >>> REPLACE: nanoCAD Object root -->
+    <NCadSdkRoot Condition="'$(NCadSdkRoot)'==''">$(SolutionDir)..\ncadsdk</NCadSdkRoot>
+
+    <!-- >>> REPLACE: Model Studio sources root -->
+    <ModelStudioRoot Condition="'$(ModelStudioRoot)'==''">$(SolutionDir)..\Model Studio</ModelStudioRoot>
+
+    <!-- >>> REPLACE: lib folder name under Source\lib\VS16\ -->
+    <MsLibConfig Condition="'$(MsLibConfig)'==''">Release NCAD241</MsLibConfig>
+
+    <!-- Derived (обычно не трогать) -->
+    <MsSourceDir>$(ModelStudioRoot)\Source</MsSourceDir>
+    <MsCommonDir>$(ModelStudioRoot)\Common\Common_vc7</MsCommonDir>
+    <MsApiDataDir>$(ModelStudioRoot)\API\ModelStudioAPI\msData</MsApiDataDir>
+    <MsLibDir>$(MsSourceDir)\lib\VS16\$(MsLibConfig)\x64</MsLibDir>
+    <NCadSdkInclude>$(NCadSdkRoot)\include</NCadSdkInclude>
+    <NCadSdkIncludeX64>$(NCadSdkRoot)\include-x64</NCadSdkIncludeX64>
+    <NCadSdkLibX64>$(NCadSdkRoot)\lib-x64</NCadSdkLibX64>
+  </PropertyGroup>
+
+  <!-- Include roots used by all NCAD configs -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>
+        $(NCadSdkInclude);
+        $(NCadSdkInclude)\arxgate;
+        $(NCadSdkInclude)\nrxhostgate;
+        $(NCadSdkInclude)\nrxuigate;
+        $(NCadSdkInclude)\nrxgate;
+        $(NCadSdkInclude)\nrxdbgate;
+        $(NCadSdkIncludeX64);
+        $(MsSourceDir);
+        $(MsSourceDir)\msData;
+        $(MsSourceDir)\mstudioDB;
+        $(MsSourceDir)\mstudioUI;
+        $(MsSourceDir)\Params;
+        $(MsSourceDir)\ViperCS;
+        $(MsSourceDir)\ViperCSObj;
+        $(MsCommonDir);
+        $(MsApiDataDir);
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>
+        $(NCadSdkLibX64);
+        $(MsLibDir);
+        %(AdditionalLibraryDirectories)
+      </AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

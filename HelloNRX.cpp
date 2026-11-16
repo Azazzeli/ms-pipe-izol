@@ -73,19 +73,15 @@ void pipeInsulCmd()
     }
 
     CWnd* pParent = CWnd::FromHandle(adsw_acadMainWnd());
-    if (!CInsulDlg::ShowModeless(idAxis, InsulDlgMode::SingleAxis, pParent))
-        acutPrintf(L"\nPIPE_INSUL: dialog create failed.");
-    else
-        acutPrintf(L"\nPIPE_INSUL: modeless form open (drawing not blocked).");
+    CInsulDlg::ShowModal(idAxis, InsulDlgMode::SingleAxis, pParent);
+    acutPrintf(L"\nPIPE_INSUL: done.");
 }
 
 void pipeInsulAllCmd()
 {
     CWnd* pParent = CWnd::FromHandle(adsw_acadMainWnd());
-    if (!CInsulDlg::ShowModeless(AcDbObjectId::kNull, InsulDlgMode::AllAxes, pParent))
-        acutPrintf(L"\nPIPE_INSUL_ALL: dialog create failed.");
-    else
-        acutPrintf(L"\nPIPE_INSUL_ALL: modeless form open (drawing not blocked).");
+    CInsulDlg::ShowModal(AcDbObjectId::kNull, InsulDlgMode::AllAxes, pParent);
+    acutPrintf(L"\nPIPE_INSUL_ALL: done.");
 }
 
 #if defined(acrxEntryPoint)
@@ -131,19 +127,15 @@ extern "C" __declspec(dllexport) AcRx::AppRetCode __stdcall ncrxEntryPoint(AcRx:
         acrxDynamicLinker->unlockApplication(appId);
         acrxDynamicLinker->registerAppMDIAware(appId);
         acedRegCmds->addCommand(L"PIPE_GROUP", L"_PIPE_INSUL", L"PIPE_INSUL",
-            ACRX_CMD_TRANSPARENT, pipeInsulCmd);
+            ACRX_CMD_MODAL, pipeInsulCmd);
         acedRegCmds->addCommand(L"PIPE_GROUP", L"_PIPE_INSUL_ALL", L"PIPE_INSUL_ALL",
-            ACRX_CMD_TRANSPARENT, pipeInsulAllCmd);
-        acutPrintf(L"\nMsPipeIzol: PIPE_INSUL, PIPE_INSUL_ALL");
+            ACRX_CMD_MODAL, pipeInsulAllCmd);
+        acutPrintf(L"\nMsPipeIzol: PIPE_INSUL, PIPE_INSUL_ALL (modal)");
         break;
     case AcRx::kUnloadAppMsg:
-    {
-        AFX_MANAGE_STATE(AfxGetStaticModuleState());
-        if (CInsulDlg* p = CInsulDlg::GetInstance())
-            p->DestroyWindow();
+        // Modal dialog cannot be open during unload — nothing to destroy
         acedRegCmds->removeGroup(L"PIPE_GROUP");
         break;
-    }
     }
     return AcRx::kRetOK;
 }

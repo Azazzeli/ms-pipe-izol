@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Paths: edit MsPipeIzol.paths.props (NCadSdkRoot, ModelStudioRoot, MsLibConfig) -->
+  <Import Project="$(MSBuildThisFileDirectory)MsPipeIzol.paths.props" Condition="Exists('$(MSBuildThisFileDirectory)MsPipeIzol.paths.props')" />
   <PropertyGroup Condition="'$(NCadSDK)'==''" Label="NCadSDK">
-    <NCadSDK>$(SolutionDir)\..\ncadsdk\</NCadSDK>
+    <NCadSDK>$(NCadSdkRoot)\</NCadSDK>
   </PropertyGroup>
+
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug ACAD|x64">
       <Configuration>Debug ACAD</Configuration>
@@ -21,18 +24,22 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+
   <PropertyGroup Label="Globals">
     <ProjectGuid>{A8C63A28-5D03-46F9-AF7E-343C56980B60}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>MsPipeIzol</RootNamespace>
     <TargetName>MsPipeIzol</TargetName>
   </PropertyGroup>
+
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug NCAD|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <UseOfMfc>Dynamic</UseOfMfc>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug ACAD|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
@@ -55,105 +62,78 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
+
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings">
-  </ImportGroup>
+
+  <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug NCAD|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(NCadSDK)include\arxgate\rxsdk_debugcfg.props" Condition="Exists('$(NCadSDK)include\arxgate\rxsdk_debugcfg.props')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug ACAD|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release NCAD|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(NCadSDK)include\arxgate\rxsdk_releasecfg.props" Condition="Exists('$(NCadSDK)include\arxgate\rxsdk_releasecfg.props')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release ACAD|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug NCAD|x64'" Label="PropertySheets">
-    <Import Project="$(NCadSDK)\include\arxgate\rxsdk_debugcfg.props" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release NCAD|x64'" Label="PropertySheets">
-    <Import Project="$(NCadSDK)\include\arxgate\rxsdk_releasecfg.props" />
-  </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug NCAD|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)\bin-$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)\trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)bin-$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+    <TargetExt>.nrx</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug ACAD|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>$(SolutionDir)\bin-$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)\trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)bin-$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
     <TargetExt>.nrx</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release NCAD|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)\bin-$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)\trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)bin-$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
     <TargetExt>.nrx</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release ACAD|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(SolutionDir)\bin-$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)\trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)bin-$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)trash-$(Platform)\$(ProjectName)\$(Configuration)\</IntDir>
     <TargetExt>.arx</TargetExt>
   </PropertyGroup>
+
+  <!-- ========== Debug NCAD ========== -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug NCAD|x64'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_WIN64;WIN32;_DEBUG;_WINDOWS;_USRDLL;HELLONRX_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WIN64;_NCAD;_NCAD24_;NCAD;WIN32;_DEBUG;_WINDOWS;_USRDLL;HELLONRX_EXPORTS;HELLONRX_MODULE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>
         $(OARXROOT2021)\inc;
         $(OARXROOT2021)\inc-$(Platform);
-        D:\WORK\SAP\Model Studio\Source;
-        D:\WORK\SAP\Model Studio\Source\msData;
-        D:\WORK\SAP\Model Studio\Source\mstudioDB;
-        D:\WORK\SAP\Model Studio\Source\mstudioUI;
-        D:\WORK\SAP\Model Studio\Source\Params;
-        D:\WORK\SAP\Model Studio\Source\ViperCS;
-        D:\WORK\SAP\Model Studio\Common\Common_vc7;
-        D:\WORK\SAP\Model Studio\API\ModelStudioAPI\msData;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableCOMDATFolding>false</EnableCOMDATFolding>
-      <CLRImageType>Default</CLRImageType>
       <TargetMachine>MachineX64</TargetMachine>
-      <AdditionalLibraryDirectories>
-        D:\WORK\SAP\Model Studio\Source\lib\VS16\Release NCAD241\x64;
-        D:\WORK\SAP\Model Studio\Source\lib\VS16\Release NCAD24\x64;
-        %(AdditionalLibraryDirectories)
-      </AdditionalLibraryDirectories>
+      <ModuleDefinitionFile>HelloNRX.def</ModuleDefinitionFile>
       <AdditionalDependencies>
-        LibManager.lib;
         ViperCS.lib;
         ViperCSObj.lib;
-        ViperCSObjCom.lib;
-        ViperCSObjPatch.lib;
-        ViperCSRename.lib;
-        ViperCStart.lib;
-        msPipeNetworks.lib;
-        msPipeNetworksObjects.lib;
-        msPipeNetworksCom.lib;
-        UnitsCS.lib;
-        bases.lib;
-        Params.lib;
         mstudioData.lib;
-        mstudioDB.lib;
-        mstudioUI.lib;
-        mstudioReports.lib;
-        mstudioFrame.lib;
         %(AdditionalDependencies)
       </AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+
+  <!-- ========== Debug ACAD (legacy stub) ========== -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug ACAD|x64'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -163,26 +143,6 @@
       <AdditionalIncludeDirectories>
         $(OARXROOT2021)\inc;
         $(OARXROOT2021)\inc-$(Platform);
-        D:\WORK\SAP\ncadsdk\include;
-        D:\WORK\SAP\ncadsdk\include\arxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxhostgate;
-        D:\WORK\SAP\ncadsdk\include\nrxuigate;
-        D:\WORK\SAP\ncadsdk\include\nrxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxdbgate;
-        D:\WORK\SAP\ncadsdk\include\MAPI;
-        D:\WORK\SAP\ncadsdk\include\MAPI\McGe;
-        D:\WORK\SAP\ncadsdk\include-x64;
-        D:\WORK\SAP\ncadsdk\include-x64\Drawing\ActiveX\OdaX;
-        D:\WORK\SAP\ncadsdk\include-x64\Drawing\ActiveX\OdaX\OdaX.h;
-        D:\WORK\SAP\Model Studio\Source;
-        D:\WORK\SAP\Model Studio\Source\msData;
-        D:\WORK\SAP\Model Studio\Source\mstudioDB;
-        D:\WORK\SAP\Model Studio\Source\mstudioUI;
-        D:\WORK\SAP\Model Studio\Source\Params;
-        D:\WORK\SAP\Model Studio\Source\ViperCS;
-        D:\WORK\SAP\Model Studio\Common\Common_vc7;
-        D:\WORK\SAP\Model Studio\API\ModelStudioAPI\msData;
-        D:\WORK\SAP\Model Studio\Source\ViperCSObj;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -190,10 +150,12 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OARXROOT2021)\lib-$(Platform);D:\WORK\SAP\ncadsdk\lib-x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>nrxdbgate.lib;nrxhostgate.lib;nrxuigate.lib;McGeL.lib;McTyp.lib;MechCtl.lib;MT.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OARXROOT2021)\lib-$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>nrxdbgate.lib;nrxhostgate.lib;nrxuigate.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+
+  <!-- ========== Release NCAD (???????? ??????) ========== -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release NCAD|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -201,27 +163,11 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <!-- Без /utf-8: исходники в Windows-1251 (системная кодировка RU) -->
+      <!-- Do NOT force /utf-8: SDK headers are often CP1251. UI strings use \xXXXX. -->
       <PreprocessorDefinitions>_WIN64;_NCAD;_NCAD24_;NCAD;WIN32;NDEBUG;_WINDOWS;_USRDLL;HELLONRX_EXPORTS;HELLONRX_MODULE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>
         $(OARXROOT2021)\inc;
         $(OARXROOT2021)\inc-$(Platform);
-        D:\WORK\SAP\ncadsdk\include;
-        D:\WORK\SAP\ncadsdk\include\arxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxhostgate;
-        D:\WORK\SAP\ncadsdk\include\nrxuigate;
-        D:\WORK\SAP\ncadsdk\include\nrxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxdbgate;
-        D:\WORK\SAP\ncadsdk\include-x64;
-        D:\WORK\SAP\Model Studio\Source;
-        D:\WORK\SAP\Model Studio\Source\msData;
-        D:\WORK\SAP\Model Studio\Source\mstudioDB;
-        D:\WORK\SAP\Model Studio\Source\mstudioUI;
-        D:\WORK\SAP\Model Studio\Source\Params;
-        D:\WORK\SAP\Model Studio\Source\ViperCS;
-        D:\WORK\SAP\Model Studio\Source\ViperCSObj;
-        D:\WORK\SAP\Model Studio\Common\Common_vc7;
-        D:\WORK\SAP\Model Studio\API\ModelStudioAPI\msData;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
     </ClCompile>
@@ -231,11 +177,6 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <TargetMachine>MachineX64</TargetMachine>
       <ModuleDefinitionFile>HelloNRX.def</ModuleDefinitionFile>
-      <AdditionalLibraryDirectories>
-        D:\WORK\SAP\ncadsdk\lib-x64;
-        D:\WORK\SAP\Model Studio\Source\lib\VS16\Release NCAD241\x64;
-        %(AdditionalLibraryDirectories)
-      </AdditionalLibraryDirectories>
       <AdditionalDependencies>
         ViperCS.lib;
         ViperCSObj.lib;
@@ -243,7 +184,18 @@
         %(AdditionalDependencies)
       </AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>if not exist "$(SolutionDir)deploy" mkdir "$(SolutionDir)deploy"
+copy /Y "$(OutDir)$(TargetFileName)" "$(SolutionDir)deploy\$(TargetFileName)"
+if errorlevel 1 (
+  echo WARNING: could not update deploy\$(TargetFileName) - file may be locked by nanoCAD. Output is still in $(OutDir)
+  exit /b 0
+)</Command>
+      <Message>Copy $(TargetFileName) to deploy\</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
+
+  <!-- ========== Release ACAD (legacy stub) ========== -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release ACAD|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -255,26 +207,6 @@
       <AdditionalIncludeDirectories>
         $(OARXROOT2021)\inc;
         $(OARXROOT2021)\inc-$(Platform);
-        D:\WORK\SAP\ncadsdk\include;
-        D:\WORK\SAP\ncadsdk\include\arxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxhostgate;
-        D:\WORK\SAP\ncadsdk\include\nrxuigate;
-        D:\WORK\SAP\ncadsdk\include\nrxgate;
-        D:\WORK\SAP\ncadsdk\include\nrxdbgate;
-        D:\WORK\SAP\ncadsdk\include\MAPI;
-        D:\WORK\SAP\ncadsdk\include\MAPI\McGe;
-        D:\WORK\SAP\ncadsdk\include-x64;
-        D:\WORK\SAP\ncadsdk\include-x64\Drawing\ActiveX\OdaX;
-        D:\WORK\SAP\ncadsdk\include-x64\Drawing\ActiveX\OdaX\OdaX.h;
-        D:\WORK\SAP\Model Studio\Source;
-        D:\WORK\SAP\Model Studio\Source\msData;
-        D:\WORK\SAP\Model Studio\Source\mstudioDB;
-        D:\WORK\SAP\Model Studio\Source\mstudioUI;
-        D:\WORK\SAP\Model Studio\Source\Params;
-        D:\WORK\SAP\Model Studio\Source\ViperCS;
-        D:\WORK\SAP\Model Studio\Common\Common_vc7;
-        D:\WORK\SAP\Model Studio\API\ModelStudioAPI\msData;
-        D:\WORK\SAP\Model Studio\Source\ViperCSObj;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -286,6 +218,7 @@
       <AdditionalLibraryDirectories>$(OARXROOT2021)\lib-$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
+
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="InsulDlg.h" />
@@ -307,10 +240,12 @@
     <ResourceCompile Include="HelloNRX.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="all_folders.props" />
+    <None Include="MsPipeIzol.paths.props" />
+    <None Include="MsPipeIzol.paths.props.example" />
     <None Include="HelloNRX.def" />
+    <None Include="README.md" />
   </ItemGroup>
+
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>
